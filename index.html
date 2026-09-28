@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1020"><link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/icon-192.png"><title>Deriv Trading Copilot</title>
+<style>
+:root{--bg:#0b1020;--c:#141b30;--b:#26304d;--t:#e8ecf7;--m:#8b96b5;--g:#22c55e;--r:#ef4444;--y:#f59e0b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,sans-serif;padding:env(safe-area-inset-top) 12px 40px}
+main{max-width:720px;margin:auto;display:grid;gap:10px}.c{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:12px}
+h1{font-size:16px;letter-spacing:.12em;margin:14px 0 0}h2{font-size:11px;color:var(--m);letter-spacing:.1em;margin:0 0 8px}
+select,input,button,textarea{font:inherit;color:var(--t);background:#0e1426;border:1px solid var(--b);border-radius:10px;padding:12px;width:100%;min-height:46px}
+button{cursor:pointer;background:#1c2748}button.p{background:#2563eb;border-color:#2563eb}button.d{background:#7f1d1d}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row{display:flex;justify-content:space-between;padding:3px 0}.m{color:var(--m)}
+#dec{font-size:46px;font-weight:800;text-align:center;margin:4px 0}.RISE{color:var(--g)}.FALL{color:var(--r)}.WAIT{color:var(--y)}
+#card.sig{border-color:currentColor;animation:f 1s 2}@keyframes f{50%{background:#1f2a4d}}
+#err{color:#fca5a5;font-size:13px}#off{background:#7f1d1d;text-align:center;padding:8px;border-radius:10px}
+dialog{background:var(--c);color:var(--t);border:1px solid var(--b);border-radius:14px;width:min(94vw,520px);max-height:90vh}dialog::backdrop{background:#000a}
+label{display:block;font-size:12px;color:var(--m);margin:8px 0 3px}ul{padding-left:18px;margin:6px 0}small{color:var(--m)}
+</style></head><body><main>
+<h1>DERIV TRADING COPILOT</h1>
+<div id="off" hidden>OFFLINE — LIVE MARKET ANALYSIS UNAVAILABLE</div>
+<div class="c"><div class="row"><span>Connection</span><b id="conn">…</b></div><div class="row"><span>Account</span><b id="acct">Not connected</b></div><div class="row"><span>Balance</span><b id="bal">—</b></div>
+<div class="g2"><button id="bAcct">Connect account</button><button id="bSet">Settings</button></div><div id="err"></div></div>
+<div class="c"><h2>MARKET</h2><select id="sym"><option value="">Loading markets…</option></select><small id="prof"></small><h2 style="margin-top:10px">EXPIRY</h2><select id="exp"></select></div>
+<div class="c"><h2>ANALYSIS STATUS</h2><div id="chk"></div></div>
+<div class="c" id="card"><h2>FINAL DECISION</h2><div id="dec" class="WAIT">WAIT</div><div id="sub" class="m" style="text-align:center"></div><ul id="why"></ul><div id="meta" class="m"></div><div class="g2" id="sigb" hidden><button class="p" id="bAck">ACKNOWLEDGE</button><button id="bRec">Record trade</button></div></div>
+<div class="c"><h2>MARKET DETAILS</h2><div class="g2"><div class="row"><span>Trend</span><b id="dTr">—</b></div><div class="row"><span>Momentum</span><b id="dMo">—</b></div><div class="row"><span>Regime</span><b id="dRe">—</b></div><div class="row"><span>RSI</span><b id="dRs">—</b></div><div class="row"><span>EMA 9</span><b id="dE9">—</b></div><div class="row"><span>EMA 21</span><b id="dE21">—</b></div></div></div>
+<div class="c"><h2>RISK STATUS</h2><div class="row"><span>Daily P/L</span><b id="rPL">$0.00</b></div><div class="row"><span>Loss streak</span><b id="rLS">0 / 3</b></div><div class="row"><span>Risk</span><b id="rSt">SAFE</b></div><div class="row"><span>Suggested stake</span><b id="rSk">—</b></div></div>
+<div class="g2"><button class="p" id="bGo">ANALYZE</button><button class="d" id="bStop">STOP ANALYSIS</button><button id="bWake">WAKE LOCK: OFF</button><button id="bJ">TRADE JOURNAL</button><button id="bSnd">SOUND: ON</button><button id="bBt">HISTORICAL SIMULATION</button></div>
+<small>Decision support only. Never places trades. Signals are condition checks, not predictions or guarantees.</small>
+</main>
+<dialog id="dJ"><h2>TRADE JOURNAL</h2><div id="jStats"></div><label>Signal</label><select id="jSig"><option>RISE</option><option>FALL</option></select><label>Actual stake</label><input id="jStk" type="number" step="0.01" min="0"><label>Result</label><select id="jRes"><option>WIN</option><option>LOSS</option><option>VOID</option></select><label>P/L (blank = −stake on LOSS)</label><input id="jPL" type="number" step="0.01"><label>Notes</label><input id="jNote" maxlength="200"><div class="g2" style="margin-top:10px"><button class="p" id="jAdd">Add entry</button><button id="jX">Close</button></div><div id="jList" style="margin-top:8px;font-size:13px"></div></dialog>
+<dialog id="dS"><h2>SETTINGS</h2><div id="sForm"></div><div class="g2" style="margin-top:10px"><button class="p" id="sOk">Save</button><button id="sX">Cancel</button></div></dialog>
+<dialog id="dB"><h2>HISTORICAL SIMULATION</h2><small>Replays loaded history through the live engine. Not a forecast.</small><label>Hypothetical stake</label><input id="bStk" type="number" value="1" step="0.01"><label>Payout % (assumption)</label><input id="bPay" type="number" value="95"><div class="g2" style="margin-top:10px"><button class="p" id="bRun">Run</button><button id="bX">Close</button></div><pre id="bOut" style="white-space:pre-wrap"></pre></dialog>
+<script type="module" src="app.js"></script></body></html>
