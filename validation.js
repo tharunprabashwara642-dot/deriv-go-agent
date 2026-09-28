@@ -9,7 +9,7 @@ export function parseTicks(text){let pr=[],tm=[];const t=String(text).trim();
  if(!pr.length){tm=[];for(const ln of t.split(/\r?\n/)){const c=ln.split(/[,;\t ]+/).filter(Boolean).map(Number);if(!c.length||c.some(Number.isNaN))continue;if(c.length===1)pr.push(c[0]);else{tm.push(c[0]);pr.push(c[1])}}}
  return clean(pr,tm)}
 // Signal at tick i-1 (last tick analysed) -> entry = tick i -> exit = tick i+h. Ties lose. Outcome never uses data past i+h.
-export function walkForward(p,t,h,prof,cfg,o={}){const fn=o.fn||analyze,from=Math.max(o.from??250,250),to=o.to??p.length,R={recs:[],wait:0,points:0};
+export function walkForward(p,t,h,prof,cfg,o={}){const fn=o.fn||analyze,from=Math.max(o.from??250,250),to=o.to??p.length,R={recs:[],wait:0,points:0},cfg=o.cfg||DEFAULT_CFG;
  for(let i=from;i+h<to;){const r=fn(p.slice(Math.max(0,i-400),i),h,prof,cfg);R.points++;
   if(r.decision==='WAIT'){R.wait++;i++;continue}
   const a=p[i],b=p[i+h],out=b===a?'TIE':(r.decision==='RISE'?b>a:b<a)?'WIN':'LOSS';
