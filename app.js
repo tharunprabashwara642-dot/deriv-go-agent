@@ -8,9 +8,10 @@ const kvGet=async k=>{try{const d=await db;return await new Promise(ok=>{const q
 const kvSet=async(k,v)=>{try{const d=await db;await new Promise(ok=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(JSON.parse(JSON.stringify(v)),k);t.oncomplete=ok;t.onerror=ok})}catch(e){err('Storage unavailable: '+e.message)}};
 let errT;const err=m=>{$('err').textContent=m;clearTimeout(errT);errT=setTimeout(()=>$('err').textContent='',9000)};
 // ---- WebSocket engine ----
-class WS{constructor(){this.id=0;this.p=new Map();this.tries=0;this.state='connecting';this.open()}
+class WS{constructor(){this.id=0;this.p=new Map();this.tries=0;this.state='connecting';this.mode='public';this.open()}
+ url(){return this.mode==='public'?'wss://api.derivws.com/trading/v1/options/ws/public':`wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(S.set.appId)}`}
  set(s){this.state=s;$('conn').textContent={connected:'● LIVE',connecting:'◌ CONNECTING',reconnecting:'◌ RECONNECTING',error:'✕ ERROR'}[s]||s}
- open(){this.set(this.tries?'reconnecting':'connecting');let ws;try{ws=this.ws=new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(S.set.appId)}`)}catch(e){err('WebSocket failed: '+e.message);return}
+ open(){this.set(this.tries?'reconnecting':'connecting');let ws;try{ws=this.ws=new WebSocket(this.url())}catch(e){err('WebSocket failed: '+e.message);return}
   ws.onopen=()=>{this.tries=0;this.set('connected');this.hb=setInterval(()=>this.send({ping:1}).catch(()=>{}),25000);this.onopen&&this.onopen()};
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return err('Malformed message ignored')}
    const q=this.p.get(m.req_id);if(q){this.p.delete(m.req_id);clearTimeout(q.t);m.error?q.no(new Error(m.error.message)):q.ok(m)}else if(m.error)err('API error: '+m.error.message);else this.onmsg&&this.onmsg(m)};
@@ -20,18 +21,18 @@ class WS{constructor(){this.id=0;this.p=new Map();this.tries=0;this.state='conne
 let ws;
 // ---- market discovery & data ----
 async function onOpen(){try{
- if(!S.syms.length){const r=await ws.send({active_symbols:'brief',product_type:'basic'});S.syms=r.active_symbols.filter(x=>/synthetic|derived/i.test(x.market)&&!x.is_trading_suspended);fillSyms()}
+ if(!S.syms.length){const r=await ws.send({active_symbols:'brief'});S.syms=(r.active_symbols||[]).filter(x=>/synthetic|derived/i.test(`${x.market||''} ${x.submarket||''} ${x.underlying_symbol_type||''} ${x.underlying_symbol_name||''}`)&&!x.is_trading_suspended);fillSyms()}
  if(S.tok)await auth(S.tok,true);
  if(S.set.sym)await load()}catch(e){err(e.message)}}
 function fillSyms(){const s=$('sym'),g={};s.replaceChildren(new Option('Select market…',''));
- for(const x of S.syms)(g[x.submarket_display_name||x.market_display_name]??=[]).push(x);
- for(const k of Object.keys(g).sort()){const og=document.createElement('optgroup');og.label=k;for(const x of g[k])og.append(new Option(x.display_name,x.symbol));s.append(og)}
+ for(const x of S.syms)(g[x.submarket_display_name||x.submarket||x.market_display_name||x.market||'Synthetic / Derived']??=[]).push(x);
+ for(const k of Object.keys(g).sort()){const og=document.createElement('optgroup');og.label=k;for(const x of g[k]){const symbol=x.symbol||x.underlying_symbol,name=x.display_name||x.underlying_symbol_name||symbol;og.append(new Option(name,symbol))}s.append(og)}
  if(!S.syms.length)err('No markets returned by Deriv');s.value=S.set.sym}
 const rng=x=>{const a=/^(\d+)t$/.exec(x?.min_contract_duration||''),b=/^(\d+)t$/.exec(x?.max_contract_duration||'');return a&&b?[+a[1],+b[1]]:null};
 async function load(){const g=++S.gen;S.price=[];S.times=[];S.active=null;S.n=0;S.last=0;S.durs=[];
  if(S.sub){ws.send({forget:S.sub}).catch(()=>{});S.sub=null}
- const sy=S.syms.find(x=>x.symbol===S.set.sym);if(!sy){fillExp();return}
- S.prof=profileFor([sy.submarket,sy.submarket_display_name,sy.display_name].join(' '));$('prof').textContent='Analysis profile: '+S.prof.name;
+ const sy=S.syms.find(x=>(x.symbol||x.underlying_symbol)===S.set.sym);if(!sy){fillExp();return}
+ S.prof=profileFor([sy.submarket,sy.submarket_display_name,sy.display_name,sy.underlying_symbol_name,sy.market].filter(Boolean).join(' '));$('prof').textContent='Analysis profile: '+S.prof.name;
  try{const a=(await ws.send({contracts_for:sy.symbol})).contracts_for.available,up=a.filter(x=>x.contract_type==='CALL').map(rng).find(Boolean),dn=a.filter(x=>x.contract_type==='PUT').map(rng).find(Boolean);
   if(g!==S.gen)return;if(up&&dn){const lo=Math.max(up[0],dn[0]),hi=Math.min(up[1],dn[1]);S.durs=[3,5,7,10,15,20,30,50].filter(x=>x>=lo&&x<=hi)}
   if(!S.durs.includes(S.set.exp))S.set.exp=S.durs[0]||0;fillExp();if(!S.durs.length)err('No Rise/Fall tick durations reported for this market');
@@ -42,7 +43,7 @@ async function load(){const g=++S.gen;S.price=[];S.times=[];S.active=null;S.n=0;
 function fillExp(){const s=$('exp');s.replaceChildren();for(const d of S.durs)s.append(new Option(d+' Ticks',d));if(!S.durs.length)s.append(new Option('Unavailable',''));s.value=S.set.exp}
 function addTick(t){if(t.symbol!==S.set.sym)return;const e=+t.epoch;if(S.times.length&&e<=S.times.at(-1))return;S.price.push(+t.quote);S.times.push(e);if(S.price.length>3300){S.price.splice(0,300);S.times.splice(0,300)}S.last=now();S.n++;if(now()-S.evalT>400)evaluate()}
 // ---- account (token kept in memory only) ----
-async function auth(tok,quiet){try{const r=await ws.send({authorize:tok});S.tok=tok;S.acct={bal:+r.authorize.balance,cur:r.authorize.currency};renderAcct()}catch(e){S.tok=null;S.acct=null;renderAcct();err('Authentication error: '+e.message)}}
+async function auth(tok,quiet){try{S.tok=tok;if(ws.mode!=='legacy'){ws.mode='legacy';ws.tries=0;ws.ws?.close();return}const r=await ws.send({authorize:tok});S.acct={bal:+r.authorize.balance,cur:r.authorize.currency};renderAcct()}catch(e){S.tok=null;S.acct=null;renderAcct();err('Authentication error: '+e.message)}}
 const bal=()=>S.acct?S.acct.bal:S.set.balance;
 function renderAcct(){$('acct').textContent=S.acct?'Connected':'Not connected';$('bal').textContent=(S.acct?S.acct.cur+' ':'$')+bal().toFixed(2);$('bAcct').textContent=S.acct?'Disconnect account':'Connect account'}
 // ---- risk ----
@@ -88,7 +89,7 @@ $('bStop').onclick=()=>{S.run=false;S.active=null;evaluate()};
 $('bSnd').onclick=()=>{S.set.sound=!S.set.sound;save();btns()};
 $('bWake').onclick=async()=>{S.set.wake=!S.set.wake;save();btns();if(S.set.wake)await wake();else{S.lock&&S.lock.release();S.lock=null}};
 $('bAck').onclick=()=>{if(S.active)S.active.ack=true;evaluate()};
-$('bAcct').onclick=()=>{if(S.acct){S.acct=null;S.tok=null;renderAcct();return}const t=prompt('Paste a READ-scope Deriv API token (kept in memory only, never saved):');if(t)auth(t.trim())};
+$('bAcct').onclick=()=>{if(S.acct||S.tok){S.acct=null;S.tok=null;ws.mode='public';renderAcct();ws.ws?.close();return}const t=prompt('Paste a READ-scope Deriv API token (kept in memory only, never saved):');if(t?.trim())auth(t.trim())};
 const renderJ=()=>{const st=journalStats(S.j,today());$('jStats').textContent=`Trades ${st.total} · W ${st.wins} / L ${st.losses} · Win rate ${st.rate.toFixed(0)}% · P/L ${f2(st.pl)} · Avg win ${f2(st.avgW)} · Avg loss ${f2(st.avgL)} · Streak ${st.streak} · Max losing streak ${st.maxLS} · Today ${f2(st.daily)}. Past results do not predict future results.`;
  $('jList').replaceChildren(...S.j.slice(-15).reverse().map(x=>{const d=document.createElement('div');d.className='row';d.textContent=`${new Date(x.t).toLocaleString()} ${x.sym} ${x.exp}t ${x.sig} ${x.res} ${f2(x.pl)}${x.note?' — '+x.note:''}`;return d}))};
 const openJ=()=>{const A=S.active;if(A)$('jSig').value=A.dir;$('jStk').value=A?.stake?.v??S.set.minStake;renderJ();$('dJ').showModal()};
